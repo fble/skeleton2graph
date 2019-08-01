@@ -163,11 +163,10 @@ Edge_Vector generate_edges(Vertex *vertex) {
 }
 
 Graph build_graph(Pre_Node *pre_node) {
-    ComplexGraph graph;
-    ComplexGraph_init(&graph,0,0);
-    graph
+    ComplexGraph *graph = NULL;
+    ComplexGraph_init(graph,0,0);
     Vertex *vertex = generate_vertex(pre_node);
-    vertex->type = Endpoint;
+    ComplexGraph_addNodeWithData(graph,0,vertex);
     Datavector_pushBack(graph.vertices, *vertex);
     Edge_Vector edges = generate_edges(vertex);
     while (edges.size > 0) {
