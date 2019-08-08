@@ -24,13 +24,17 @@ typedef declareVectorStructure(Voxel) Voxel_Vector;
 
 typedef declareVectorStructure(Pre_Node) Pre_Node_Vector;
 
-typedef declareVectorStructure(Edge) Edge_Vector;
+typedef declareVectorStructure(int) Edge_Vector;
 
 typedef declareVectorStructure(Vertex) Vertex_Vector;
 
 typedef declareVectorStructure(Edge*) Edgeptr_Vector;
 
 typedef declareVectorStructure(Graph) Graph_Vector;
+
+int global_nodeID = 0;
+
+int global_edgeID = 0;
 
 struct voxel {
     int x;
@@ -124,9 +128,9 @@ bool contains_neighbor(Neighbors_Vector vector, Voxel voxel);
 
 void printEdgeStartpoint(Edge_Vector *edges2);
 
-Edge_Vector build_subgraph(Edge *edge, Graph *graph);
+Edge_Vector build_subgraph(ComplexGraph *graph, int edgeID);
 
-void calculate_edge_length(Edge *edge);
+void calculate_edge_length(ComplexGraph *graph,int edgeID);
 
 double distance2;
 
@@ -177,5 +181,19 @@ void create_csv(Graph_Vector graph_vector, char *filename_output);
 void readFile(int *x_max, int *y_max, int *z_max);
 
 double calculate_angle_y(Vector3D vector);
+
+int getEdgeID(){
+    return global_edgeID++;
+}
+
+int getNodeID(){
+    return global_nodeID++;
+}
+
+graphedge_t * getEdge(ComplexGraph * graph,int edgeID){
+    graphedge_t * edge;
+    Hashmap_get(graph->edges,edgeID,(void**)&edge);
+    return edge;
+}
 
 #endif /* HEADER_SKELETON_GRAPH_H_ */
