@@ -9,8 +9,8 @@
 
 #define buffer 500
 
-char *filename_skeleton = "/mnt/data/stud-lifa1015/distance1/skeleton/skeleton.dat";
-char *filename_output = "/mnt/data/stud-lifa1015/distance1/graphs/";
+char *filename_skeleton = "/mnt/data/stud-lifa1015/membrane2/skeleton.dat";
+char *filename_output = "/mnt/data/stud-lifa1015/distance2/graphs/";
 
 typedef struct voxel Voxel;
 
@@ -24,9 +24,9 @@ typedef declareVectorStructure(Voxel) Voxel_Vector;
 
 typedef declareVectorStructure(Pre_Node) Pre_Node_Vector;
 
-typedef declareVectorStructure(int) Edge_Vector;
+typedef declareVectorStructure(Edge*) Edge_Vector;
 
-typedef declareVectorStructure(Vertex) Vertex_Vector;
+typedef declareVectorStructure(int) Vertex_Vector;
 
 typedef declareVectorStructure(Edge*) Edgeptr_Vector;
 
@@ -128,9 +128,9 @@ bool contains_neighbor(Neighbors_Vector vector, Voxel voxel);
 
 void printEdgeStartpoint(Edge_Vector *edges2);
 
-Edge_Vector build_subgraph(ComplexGraph *graph, int edgeID);
+Edge_Vector build_subgraph(ComplexGraph *graph, Edge *edge);
 
-void calculate_edge_length(ComplexGraph *graph,int edgeID);
+void calculate_edge_length(ComplexGraph *graph, Edge *edge);
 
 double distance2;
 

@@ -1,6 +1,19 @@
 #include "skeleton2graph.h"
 
 
+int findNodeID(ComplexGraph *graph, Voxel voxel) {
+    for (int i = 0; i < graph->nodes->allelements; ++i) {
+        Vertex *vertex = ComplexGraph_getDataFromNode(graph, i);
+        for (int j = 0; j < vertex->voxel.size; ++j) {
+            Voxel vertexVoxel = Datavector_at(vertex->voxel, j);
+            if (vertexVoxel.x == voxel.x && vertexVoxel.y == voxel.y && vertexVoxel.z == voxel.z) {
+                return i;
+            }
+        }
+    }
+    return -1;
+}
+
 Neighbors_Vector find_all_neighbors(Voxel voxel) {
     Neighbors_Vector neighbors;
     Datavector_init(neighbors, 10);
@@ -87,7 +100,7 @@ void generate_vertex(ComplexGraph *graph, Pre_Node *pre_node, int nodeID) {
         }
 
     }
-    ComplexGraph_addData2Node(graph,nodeID,vertex);
+    ComplexGraph_addData2Node(graph, nodeID, vertex);
 }
 
 void visit_voxel(Voxel voxel) {
@@ -106,8 +119,7 @@ bool is_visited(Voxel node) {
     return stageNode->visited;
 }
 
-Pre_Node *follow_edge(ComplexGraph *graph,int edgeID) {
-    Edge *edge = getEdge(graph, edgeID)->data;
+Pre_Node *follow_edge(ComplexGraph *graph, Edge *edge) {
     Voxel node = Datavector_at(edge->slabs, 1);
     Neighbors_Vector neighbors = find_new_neighbors(node);
     Pre_Node *neighbor = NULL;
@@ -153,14 +165,11 @@ Edge_Vector generate_edges(ComplexGraph *graph, int nodeID) {
             Pre_Node *edge_node = Datavector_at(new_neighbors, j);
             if (edge_node->visited == false && !contains_neighbor(neighbors, edge_node->voxel)) {
                 Datavector_pushBack(neighbors, edge_node);
-                Edge * edge  = malloc(sizeof(Edge));
+                Edge *edge = malloc(sizeof(Edge));
                 Datavector_init(edge->slabs, 10);
                 Datavector_pushBack(edge->slabs, Datavector_at(vertex->voxel, i));
                 Datavector_pushBack(edge->slabs, edge_node->voxel);
-                int edgeID = getEdgeID();
-                ComplexGraph_addNodesWithEdge(graph,nodeID,getNodeID(),edgeID);
-                ComplexGraph_addData2Edge(graph,edgeID,edge);
-                Datavector_pushBack(edge_vector,edgeID);
+                Datavector_pushBack(edge_vector, edge);
             }
         }
     }
@@ -169,13 +178,13 @@ Edge_Vector generate_edges(ComplexGraph *graph, int nodeID) {
 
 ComplexGraph *build_graph(Pre_Node *pre_node) {
     ComplexGraph *graph = malloc(sizeof(ComplexGraph));
-    ComplexGraph_init(graph,0,0);
+    ComplexGraph_init(graph, 0, 0);
     int nodeID = getNodeID();
-    ComplexGraph_addNode(graph,nodeID);
-    generate_vertex(graph,pre_node,nodeID);
-    Edge_Vector edges = generate_edges(graph,nodeID);
+    ComplexGraph_addNode(graph, nodeID);
+    generate_vertex(graph, pre_node, nodeID);
+    Edge_Vector edges = generate_edges(graph, nodeID);
     while (edges.size > 0) {
-        Edge_Vector new_edges = build_subgraph(graph,Datavector_at(edges, 0));
+        Edge_Vector new_edges = build_subgraph(graph, Datavector_at(edges, 0));
         Datavector_erase(edges, 0);
         for (int i = 0; i < new_edges.size; ++i) {
             Datavector_pushBack(edges, Datavector_at(new_edges, i));
@@ -185,21 +194,32 @@ ComplexGraph *build_graph(Pre_Node *pre_node) {
     return graph;
 }
 
-Edge_Vector build_subgraph(ComplexGraph *graph, int edgeID) {
-    Pre_Node *node = follow_edge(graph,edgeID);
+Edge_Vector build_subgraph(ComplexGraph *graph, Edge *edge) {
+    Pre_Node *node = follow_edge(graph, edge);
+    Voxel startVoxel = Datavector_at(edge->slabs, 0);
     Edge_Vector edges;
     edges.size = 0;
-    if (node != NULL && node->visited == false) {
-        graphedge_t * edge = getEdge(graph,edgeID);
-        long nodeID = edge->b->nodeinfo.id;
-        generate_vertex(graph,node,nodeID);
-        Vertex* vertex = (Vertex*)ComplexGraph_getDataFromNode(graph, nodeID);
-        if (vertex->type == Junction) {
-            edges = generate_edges(graph,nodeID);
+    int edgeID = getEdgeID();
+    int startNodeID = findNodeID(graph,startVoxel);
+    int endNodeID;
+    if (node != NULL) {
+        if (node->visited == false) {
+            endNodeID = getNodeID();
+            ComplexGraph_addNode(graph,endNodeID);
+            generate_vertex(graph, node, endNodeID);
+            Vertex *vertex = (Vertex *) ComplexGraph_getDataFromNode(graph, endNodeID);
+            if (vertex->type == Junction) {
+                edges = generate_edges(graph, endNodeID);
+            }
+        } else {
+            endNodeID = findNodeID(graph, node->voxel);
+        }
+        if(endNodeID != -1){
+            ComplexGraph_addEdge(graph,startNodeID,endNodeID,edgeID);
+            ComplexGraph_addData2Edge(graph, edgeID, edge);
+            calculate_edge_length(graph, edge);
         }
     }
-    calculate_edge_length(graph,edgeID);
-//    checkVertex(vertex);
     return edges;
 }
 
@@ -254,8 +274,7 @@ double euklid_distance(Voxel voxel1, Voxel voxel2) {
     return sqrt(pow(voxel1.x - voxel2.x, 2) + pow(voxel1.y - voxel2.y, 2) + pow(voxel1.z - voxel2.z, 2));
 }
 
-void calculate_edge_length(ComplexGraph *graph,int edgeID) {
-    Edge *edge = getEdge(graph, edgeID)->data;
+void calculate_edge_length(ComplexGraph *graph, Edge * edge) {
     double edgeLength = 0;
     if (edge->slabs.size >= 2) {
         for (int i = 0; i < edge->slabs.size - 1; ++i) {
@@ -409,10 +428,21 @@ int main(void) {
     Graph_Vector graph_vector;
     Datavector_init(graph_vector, 1);
     Pre_Node *preNode = &Datavector_at(pre_nodes, 0);
-        if (preNode->visited == false) {
-            ComplexGraph *graph = build_graph(preNode);
-            printf("%d",getNodeID());
+    if (preNode->visited == false) {
+        ComplexGraph *graph = build_graph(preNode);
+        int id = getNodeID();
+        for (int i = 0; i < id; ++i) {
+            complexnode_t *node;
+            Hashmap_get(graph->nodes, i, (void **) &node);
+            Vertex *vertex = (Vertex *) node->nodeinfo.data;
+            if (vertex != NULL) {
+                Voxel voxel = calculate_center(*vertex);
+                    printf("Center: %d,%d,%d\n",voxel.x,voxel.y,voxel.z);
+            } else {
+                printf("error\n");
+            }
         }
+    }
 //    for (int i = 0; i < pre_nodes.size; ++i) {
 //        Pre_Node *preNode = &Datavector_at(pre_nodes, i);
 //        if (preNode->visited == false) {
