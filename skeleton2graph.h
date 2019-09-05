@@ -9,8 +9,8 @@
 
 #define buffer 500
 
-char *filename_skeleton = "/mnt/data/stud-lifa1015/membrane2/skeleton.dat";
-char *filename_output = "/mnt/data/stud-lifa1015/distance2/graphs/";
+char *filename_skeleton = "/mnt/data/stud-lifa1015/membrane1/skeleton.dat";
+char *filename_output = "/mnt/data/stud-lifa1015/membrane1/graphs2/";
 
 typedef struct voxel Voxel;
 
@@ -26,11 +26,11 @@ typedef declareVectorStructure(Pre_Node) Pre_Node_Vector;
 
 typedef declareVectorStructure(Edge*) Edge_Vector;
 
-typedef declareVectorStructure(int) Vertex_Vector;
+typedef declareVectorStructure(Vertex *) Vertex_Vector;
 
 typedef declareVectorStructure(Edge*) Edgeptr_Vector;
 
-typedef declareVectorStructure(Graph) Graph_Vector;
+typedef declareVectorStructure(ComplexGraph *) Graph_Vector;
 
 int global_nodeID = 0;
 
@@ -55,6 +55,7 @@ enum vertex_type {
 struct edge {
     Voxel_Vector slabs;
     double length;
+    int startNodeID;
 };
 //
 struct vertex {
@@ -132,6 +133,9 @@ Edge_Vector build_subgraph(ComplexGraph *graph, Edge *edge);
 
 void calculate_edge_length(ComplexGraph *graph, Edge *edge);
 
+Vertex_Vector get_allVertices(ComplexGraph *graph);
+
+
 double distance2;
 
 double distance3;
@@ -188,6 +192,14 @@ int getEdgeID(){
 
 int getNodeID(){
     return global_nodeID++;
+}
+
+void resetNodeID(){
+    global_nodeID = 0;
+}
+
+void resetEdgeID(){
+    global_edgeID = 0;
 }
 
 graphedge_t * getEdge(ComplexGraph * graph,int edgeID){

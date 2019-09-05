@@ -2,8 +2,9 @@
 
 
 int findNodeID(ComplexGraph *graph, Voxel voxel) {
-    for (int i = 0; i < graph->nodes->allelements; ++i) {
-        Vertex *vertex = ComplexGraph_getDataFromNode(graph, i);
+    Vertex_Vector vertices = get_allVertices(graph);
+    for (int i = 0; i < vertices.size; ++i) {
+        Vertex *vertex = Datavector_at(vertices, i);
         for (int j = 0; j < vertex->voxel.size; ++j) {
             Voxel vertexVoxel = Datavector_at(vertex->voxel, j);
             if (vertexVoxel.x == voxel.x && vertexVoxel.y == voxel.y && vertexVoxel.z == voxel.z) {
@@ -73,10 +74,10 @@ Neighbors_Vector find_new_neighbors(Voxel node) {
 void generate_vertex(ComplexGraph *graph, Pre_Node *pre_node, int nodeID) {
     Vertex *vertex = malloc(sizeof(Vertex));
     Datavector_init(vertex->voxel, 7);
-    Neighbors_Vector neighbors = find_new_neighbors(pre_node->voxel);
+    Neighbors_Vector neighbors = find_all_neighbors(pre_node->voxel);
     Datavector_pushBack(vertex->voxel, pre_node->voxel);
     visit_voxel(pre_node->voxel);
-    if (neighbors.size == 0) {
+    if (neighbors.size == 1) {
         vertex->type = Endpoint;
     } else {
         vertex->type = Junction;
@@ -166,6 +167,7 @@ Edge_Vector generate_edges(ComplexGraph *graph, int nodeID) {
             if (edge_node->visited == false && !contains_neighbor(neighbors, edge_node->voxel)) {
                 Datavector_pushBack(neighbors, edge_node);
                 Edge *edge = malloc(sizeof(Edge));
+                edge->startNodeID = nodeID;
                 Datavector_init(edge->slabs, 10);
                 Datavector_pushBack(edge->slabs, Datavector_at(vertex->voxel, i));
                 Datavector_pushBack(edge->slabs, edge_node->voxel);
@@ -179,6 +181,8 @@ Edge_Vector generate_edges(ComplexGraph *graph, int nodeID) {
 ComplexGraph *build_graph(Pre_Node *pre_node) {
     ComplexGraph *graph = malloc(sizeof(ComplexGraph));
     ComplexGraph_init(graph, 0, 0);
+    resetNodeID();
+    resetEdgeID();
     int nodeID = getNodeID();
     ComplexGraph_addNode(graph, nodeID);
     generate_vertex(graph, pre_node, nodeID);
@@ -196,16 +200,15 @@ ComplexGraph *build_graph(Pre_Node *pre_node) {
 
 Edge_Vector build_subgraph(ComplexGraph *graph, Edge *edge) {
     Pre_Node *node = follow_edge(graph, edge);
-    Voxel startVoxel = Datavector_at(edge->slabs, 0);
     Edge_Vector edges;
     edges.size = 0;
     int edgeID = getEdgeID();
-    int startNodeID = findNodeID(graph,startVoxel);
+    int startNodeID = edge->startNodeID;
     int endNodeID;
     if (node != NULL) {
         if (node->visited == false) {
             endNodeID = getNodeID();
-            ComplexGraph_addNode(graph,endNodeID);
+            ComplexGraph_addNode(graph, endNodeID);
             generate_vertex(graph, node, endNodeID);
             Vertex *vertex = (Vertex *) ComplexGraph_getDataFromNode(graph, endNodeID);
             if (vertex->type == Junction) {
@@ -214,10 +217,12 @@ Edge_Vector build_subgraph(ComplexGraph *graph, Edge *edge) {
         } else {
             endNodeID = findNodeID(graph, node->voxel);
         }
-        if(endNodeID != -1){
-            ComplexGraph_addEdge(graph,startNodeID,endNodeID,edgeID);
+        if (endNodeID != -1) {
+            ComplexGraph_addEdge(graph, startNodeID, endNodeID, edgeID);
             ComplexGraph_addData2Edge(graph, edgeID, edge);
             calculate_edge_length(graph, edge);
+        } else{
+            printf("error\n");
         }
     }
     return edges;
@@ -274,7 +279,7 @@ double euklid_distance(Voxel voxel1, Voxel voxel2) {
     return sqrt(pow(voxel1.x - voxel2.x, 2) + pow(voxel1.y - voxel2.y, 2) + pow(voxel1.z - voxel2.z, 2));
 }
 
-void calculate_edge_length(ComplexGraph *graph, Edge * edge) {
+void calculate_edge_length(ComplexGraph *graph, Edge *edge) {
     double edgeLength = 0;
     if (edge->slabs.size >= 2) {
         for (int i = 0; i < edge->slabs.size - 1; ++i) {
@@ -286,132 +291,159 @@ void calculate_edge_length(ComplexGraph *graph, Edge * edge) {
     edge->length = edgeLength;
 }
 
-//int cmp_graph(const void *a, const void *b) {
-//    Graph *graph_a = (Graph *) a;
-//    Graph *graph_b = (Graph *) b;
-//    return (graph_b->vertices.size - graph_a->vertices.size);
-//}
-//
-//double vector_length(Vector3D vector) {
-//    return sqrt(pow(vector.x, 2) + pow(vector.y, 2) + pow(vector.z, 2));
-//}
-//
-//double calculate_angle_x(Vector3D vector) {
-//    return fabs(asin(vector.x / vector_length(vector)) * 180 / M_PI);
-//}
-//
-//double calculate_angle_y(Vector3D vector) {
-//    return fabs(asin(vector.y / vector_length(vector)) * 180 / M_PI);
-//}
-//
-//double calculate_angle_z(Vector3D vector) {
-//    return fabs(asin(vector.z / vector_length(vector)) * 180 / M_PI);
-//}
-//
-//Vertex_Vector get_junctions(Graph graph) {
-//    Vertex_Vector junctions;
-//    Datavector_init(junctions, 100);
-//    for (int i = 0; i < graph.vertices.size; ++i) {
-//        Vertex vertex = Datavector_at(graph.vertices, i);
-//        if (vertex.type == Junction) {
-//            Datavector_pushBack(junctions, vertex);
+int cmp_graph(const void *a, const void *b) {
+    ComplexGraph *graph_a = *(ComplexGraph **) a;
+    ComplexGraph *graph_b = *(ComplexGraph **) b;
+    return (graph_b->nodes->allelements - graph_a->nodes->allelements);
+}
+
+double vector_length(Vector3D vector) {
+    return sqrt(pow(vector.x, 2) + pow(vector.y, 2) + pow(vector.z, 2));
+}
+
+double calculate_angle_x(Vector3D vector) {
+    return fabs(asin(vector.x / vector_length(vector)) * 180 / M_PI);
+}
+
+double calculate_angle_y(Vector3D vector) {
+    return fabs(asin(vector.y / vector_length(vector)) * 180 / M_PI);
+}
+
+double calculate_angle_z(Vector3D vector) {
+    return fabs(asin(vector.z / vector_length(vector)) * 180 / M_PI);
+}
+
+Vertex_Vector get_allVertices(ComplexGraph *graph){
+    Vertex_Vector vertices;
+    Datavector_init(vertices, 100);
+    complexnode_t **values;
+    long size = graph->nodes->allelements;
+    Hashmap_getAllValues(graph->nodes, (void ***) &values, &size);
+    for (int i = 0; i < size; ++i) {
+        Datavector_pushBack(vertices,(Vertex *) values[i]->nodeinfo.data);
+    }
+    return vertices;
+}
+
+Edge_Vector get_allEdges(ComplexGraph *graph){
+    Edge_Vector edges;
+    Datavector_init(edges, 100);
+    graphedge_t **values;
+    long size = graph->edges->allelements;
+    Hashmap_getAllValues(graph->edges, (void ***) &values, &size);
+    for (int i = 0; i < size; ++i) {
+        Datavector_pushBack(edges,(Edge *) values[i]->data);
+    }
+    return edges;
+}
+
+Vertex_Vector get_junctions(ComplexGraph *graph) {
+    Vertex_Vector junctions;
+    Datavector_init(junctions, 100);
+    Vertex_Vector vertices = get_allVertices(graph);
+    for (int i = 0; i < vertices.size; ++i) {
+        Vertex *vertex = Datavector_at(vertices, i);
+        if(vertex->type == Junction){
+            Datavector_pushBack(junctions,vertex);
+        }
+    }
+    return junctions;
+}
+
+
+void create_csv(Graph_Vector graph_vector, char *filename_path) {
+    struct stat st = {0};
+    if (stat(filename_path, &st) == -1) {
+        mkdir(filename_path, 0700);
+    }
+    for (int i = 0; i < graph_vector.size; ++i) {
+        ComplexGraph *graph = Datavector_at(graph_vector, i);
+        char *oldLocale = setlocale(LC_NUMERIC, NULL);
+        setlocale(LC_NUMERIC, "");
+        char file[buffer];
+        sprintf(file, "%sGraph_%d", filename_path, i);
+        FILE *csv_overview = fopen(strcat(file, "_overview.csv"), "w+");
+        int number_of_endpoints = 0;
+        int number_of_junctions = 0;
+        int number_of_junction_voxels = 0;
+        int number_of_slabs = 0;
+        Vertex_Vector vertices = get_allVertices(graph);
+        Edge_Vector edges = get_allEdges(graph);
+        for (int i = 0; i < vertices.size; ++i) {
+            Vertex *vertex = Datavector_at(vertices, i);
+            if (vertex->type == Junction) {
+                number_of_junctions++;
+                number_of_junction_voxels += vertex->voxel.size;
+            }
+            if (vertex->type == Endpoint) {
+                number_of_endpoints++;
+            }
+        }
+        for (int i = 0; i < edges.size; ++i) {
+            Edge *edge = Datavector_at(edges, i);
+            number_of_slabs += edge->slabs.size - 2;
+        }
+        fprintf(csv_overview, "#Vertices;#Junctions;#Junction Voxels;#Endpoints;#Edges;#Slab Voxels\n");
+        fprintf(csv_overview, "%zu;%d;%d;%d;%zu;%d\n", vertices.size, number_of_junctions,
+                number_of_junction_voxels,
+                number_of_endpoints, edges.size, number_of_slabs);
+        fprintf(csv_overview, "\n");
+        fprintf(csv_overview, "Average length;Median length\n");
+        fprintf(csv_overview, "=MITTELWERT(A7:A%zu);=MEDIAN(A7:A%zu)\n\n", edges.size + 6,
+                edges.size + 6);
+        fprintf(csv_overview,
+                "Edges Length;Average radius;Min radius;Max radius;Start;End;Normalized orientation;Angle yz-plane;Angle xz-plane;Angle xy-plane;Junction center;Junction radius\n");
+        Vertex_Vector junctions = get_junctions(graph);
+        double max_size = fmax(edges.size, junctions.size);
+        for (int i = 0; i < max_size; ++i) {
+            if (i < edges.size) {
+                Edge *edge = Datavector_at(edges, i);
+                double average_radius = 0;
+                double max_radius = 0;
+                double min_radius = DBL_MAX;
+                for (int i = 0; i < edge->slabs.size; ++i) {
+                    Voxel node = Datavector_at(edge->slabs, i);
+                    average_radius += node.r;
+                    if (node.r > max_radius) {
+                        max_radius = node.r;
+                    }
+                    if (node.r < min_radius) {
+                        min_radius = node.r;
+                    }
+                }
+                average_radius /= edge->slabs.size;
+                fprintf(csv_overview, "%f;%f;%f;%f;", edge->length, average_radius, min_radius, max_radius);
+                Voxel start = Datavector_at(edge->slabs, 0);
+                fprintf(csv_overview, "%d,%d,%d;", start.x, start.y, start.z);
+                Voxel end = Datavector_at(edge->slabs, edge->slabs.size - 1);
+                fprintf(csv_overview, "%d,%d,%d;", end.x, end.y, end.z);
+                double distance = euklid_distance(start, end);
+                Vector3D vector;
+                vector.x = (end.x - start.x) / distance;
+                vector.y = (end.y - start.y) / distance;
+                vector.z = (end.z - start.z) / distance;
+                fprintf(csv_overview, "%.2f %.2f %.2f;%.2f;%.2f;%.2f;", vector.x, vector.y, vector.z,
+                        calculate_angle_x(vector), calculate_angle_y(vector), calculate_angle_z(vector));
+            } else {
+                fprintf(csv_overview, ";;;;;;;;;;");
+            }
+            if (i < junctions.size) {
+                Vertex *junction = Datavector_at(junctions, i);
+                Voxel node = calculate_center(*junction);
+                fprintf(csv_overview, "%d,%d,%d;%f\n", node.x, node.y, node.z, node.r);
+            } else {
+                fprintf(csv_overview, "\n");
+            }
+        }
+//        setlocale(LC_NUMERIC, oldLocale);
+//        FILE *csv_length = fopen(strcat(file, "_length.csv"), "w+");
+//        for (int i = 0; i < graph->edges.size; ++i) {
+//            fprintf(csv_length, "%f\n", Datavector_at(graph->edges, i).length);
 //        }
-//    }
-//    return junctions;
-//}
-//
-//
-//void create_csv(Graph_Vector graph_vector, char *filename_path) {
-//    struct stat st = {0};
-//    if (stat(filename_path, &st) == -1) {
-//        mkdir(filename_path, 0700);
-//    }
-//    for (int i = 0; i < graph_vector.size; ++i) {
-//        Graph graph = Datavector_at(graph_vector, i);
-//        char *oldLocale = setlocale(LC_NUMERIC, NULL);
-//        setlocale(LC_NUMERIC, "");
-//        char file[buffer];
-//        sprintf(file, "%sGraph_%d", filename_path, i);
-//        FILE *csv_overview = fopen(strcat(file, "_overview.csv"), "w+");
-//        int number_of_endpoints = 0;
-//        int number_of_junctions = 0;
-//        int number_of_junction_voxels = 0;
-//        int number_of_slabs = 0;
-//        for (int i = 0; i < graph.vertices.size; ++i) {
-//            Vertex vertex = Datavector_at(graph.vertices, i);
-//            if (vertex.type == Junction) {
-//                number_of_junctions++;
-//                number_of_junction_voxels += vertex.voxel.size;
-//            }
-//            if (vertex.type == Endpoint) {
-//                number_of_endpoints++;
-//            }
-//        }
-//        for (int i = 0; i < graph.edges.size; ++i) {
-//            Edge edge = Datavector_at(graph.edges, i);
-//            number_of_slabs += edge.slabs.size - 2;
-//        }
-//        fprintf(csv_overview, "#Vertices;#Junctions;#Junction Voxels;#Endpoints;#Edges;#Slab Voxels\n");
-//        fprintf(csv_overview, "%zu;%d;%d;%d;%zu;%d\n", graph.vertices.size, number_of_junctions,
-//                number_of_junction_voxels,
-//                number_of_endpoints, graph.edges.size, number_of_slabs);
-//        fprintf(csv_overview, "\n");
-//        fprintf(csv_overview, "Average length;Median length\n");
-//        fprintf(csv_overview, "=MITTELWERT(A7:A%zu);=MEDIAN(A7:A%zu)\n\n", graph.edges.size + 6,
-//                graph.edges.size + 6);
-//        fprintf(csv_overview,
-//                "Edges Length;Average radius;Min radius;Max radius;Start;End;Normalized orientation;Angle yz-plane;Angle xz-plane;Angle xy-plane;Junction center;Junction radius\n");
-//        Vertex_Vector junctions = get_junctions(graph);
-//        double max_size = fmax(graph.edges.size, junctions.size);
-//        for (int i = 0; i < max_size; ++i) {
-//            if (i < graph.edges.size) {
-//                Edge edge = Datavector_at(graph.edges, i);
-//                double average_radius = 0;
-//                double max_radius = 0;
-//                double min_radius = DBL_MAX;
-//                for (int i = 0; i < edge.slabs.size; ++i) {
-//                    Voxel node = Datavector_at(edge.slabs, i);
-//                    average_radius += node.r;
-//                    if (node.r > max_radius) {
-//                        max_radius = node.r;
-//                    }
-//                    if (node.r < min_radius) {
-//                        min_radius = node.r;
-//                    }
-//                }
-//                average_radius /= edge.slabs.size;
-//                fprintf(csv_overview, "%f;%f;%f;%f;", edge.length, average_radius, min_radius, max_radius);
-//                Voxel start = Datavector_at(edge.slabs, 0);
-//                fprintf(csv_overview, "%d,%d,%d;", start.x, start.y, start.z);
-//                Voxel end = Datavector_at(edge.slabs, edge.slabs.size - 1);
-//                fprintf(csv_overview, "%d,%d,%d;", end.x, end.y, end.z);
-//                double distance = euklid_distance(start, end);
-//                Vector3D vector;
-//                vector.x = (end.x - start.x) / distance;
-//                vector.y = (end.y - start.y) / distance;
-//                vector.z = (end.z - start.z) / distance;
-//                fprintf(csv_overview, "%.2f %.2f %.2f;%.2f;%.2f;%.2f;", vector.x, vector.y, vector.z,
-//                        calculate_angle_x(vector), calculate_angle_y(vector), calculate_angle_z(vector));
-//            } else {
-//                fprintf(csv_overview, ";;;;;;;;;;");
-//            }
-//            if (i < junctions.size) {
-//                Vertex junction = Datavector_at(junctions, i);
-//                Voxel node = calculate_center(junction);
-//                fprintf(csv_overview, "%d,%d,%d;%f\n", node.x, node.y, node.z, node.r);
-//            } else {
-//                fprintf(csv_overview, "\n");
-//            }
-//        }
-////        setlocale(LC_NUMERIC, oldLocale);
-////        FILE *csv_length = fopen(strcat(file, "_length.csv"), "w+");
-////        for (int i = 0; i < graph->edges.size; ++i) {
-////            fprintf(csv_length, "%f\n", Datavector_at(graph->edges, i).length);
-////        }
-//
-//    }
-//
-//}
+
+    }
+
+}
 
 int main(void) {
     int x_max;
@@ -427,38 +459,41 @@ int main(void) {
     init_distance();
     Graph_Vector graph_vector;
     Datavector_init(graph_vector, 1);
-    Pre_Node *preNode = &Datavector_at(pre_nodes, 0);
-    if (preNode->visited == false) {
-        ComplexGraph *graph = build_graph(preNode);
-        int id = getNodeID();
-        for (int i = 0; i < id; ++i) {
-            complexnode_t *node;
-            Hashmap_get(graph->nodes, i, (void **) &node);
-            Vertex *vertex = (Vertex *) node->nodeinfo.data;
-            if (vertex != NULL) {
-                Voxel voxel = calculate_center(*vertex);
-                    printf("Center: %d,%d,%d\n",voxel.x,voxel.y,voxel.z);
-            } else {
-                printf("error\n");
-            }
-        }
-    }
-//    for (int i = 0; i < pre_nodes.size; ++i) {
-//        Pre_Node *preNode = &Datavector_at(pre_nodes, i);
-//        if (preNode->visited == false) {
-//            ComplexGraph *graph = build_graph(preNode);
+//    Pre_Node *preNode = &Datavector_at(pre_nodes, 0);
+//    if (preNode->visited == false) {
+//        ComplexGraph *graph = build_graph(preNode);
+//        int id = getNodeID();
+//        for (int i = 0; i < id; ++i) {
+//            complexnode_t *node;
+//            Hashmap_get(graph->nodes, i, (void **) &node);
+//            Vertex *vertex = (Vertex *) node->nodeinfo.data;
+//            if (vertex != NULL) {
+//                Voxel voxel = calculate_center(*vertex);
+//                printf("Center: %d,%d,%d\n", voxel.x, voxel.y, voxel.z);
+//            } else {
+//                printf("error\n");
+//            }
+//        }
+//        get_junctions(graph);
+//        printf("%lu\n", graph->nodes->allelements);
+//        printf("%lu", graph->edges->allelements);
+//    }
+    for (int i = 0; i < pre_nodes.size; ++i) {
+        Pre_Node *preNode = &Datavector_at(pre_nodes, i);
+        if (preNode->visited == false) {
+            ComplexGraph *graph = build_graph(preNode);
 //            for (int i = 0; i < graph.vertices.size; ++i) {
 //                printf("Vertex Center: ");
 //                print_voxel(calculate_center(Datavector_at(graph.vertices, i)));
 //            }
-//            Datavector_pushBack(graph_vector, graph);
-//        }
-//    }
-//    Datavector_sort(graph_vector, cmp_graph);
-//    for (int i = 0; i < graph_vector.size; ++i) {
-//        printf("Graph %d: size = %zu\n", i, Datavector_at(graph_vector, i).vertices.size);
-//    }
-//    create_csv(graph_vector, filename_output);
+            Datavector_pushBack(graph_vector, graph);
+        }
+    }
+    Datavector_sort(graph_vector, cmp_graph);
+    for (int i = 0; i < graph_vector.size; ++i) {
+        printf("Graph %d: size = %zu\n", i, get_junctions(Datavector_at(graph_vector, i)).size);
+    }
+    create_csv(graph_vector, filename_output);
     return 0;
 }
 
