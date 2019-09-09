@@ -1,14 +1,15 @@
 #include "skeleton2graph.h"
 
 
-int findNodeID(ComplexGraph *graph, Voxel voxel) {
-    Vertex_Vector vertices = get_allVertices(graph);
-    for (int i = 0; i < vertices.size; ++i) {
-        Vertex *vertex = Datavector_at(vertices, i);
+long findNodeID(ComplexGraph *graph, Voxel voxel) {
+    Hashmapelement *currentelement;
+    HASHMAP_FOREACH(graph->nodes,currentelement){
+        complexnode_t *value = currentelement->value;
+        Vertex *vertex = value->nodeinfo.data;
         for (int j = 0; j < vertex->voxel.size; ++j) {
             Voxel vertexVoxel = Datavector_at(vertex->voxel, j);
             if (vertexVoxel.x == voxel.x && vertexVoxel.y == voxel.y && vertexVoxel.z == voxel.z) {
-                return i;
+                return currentelement->key;
             }
         }
     }
@@ -61,14 +62,17 @@ Neighbors_Vector find_all_neighbors(Voxel voxel) {
 }
 
 Neighbors_Vector find_new_neighbors(Voxel node) {
-    Neighbors_Vector neighbors = find_all_neighbors(node);
-    for (int i = 0; i < neighbors.size; ++i) {
-        Pre_Node *preNode = Datavector_at(neighbors, i);
-        if (preNode->visited == true) {
-            Datavector_erase(neighbors, i);
+    Neighbors_Vector allNeighbors = find_all_neighbors(node);
+    Neighbors_Vector newNeighbors;
+    Datavector_init(newNeighbors,2);
+    for (int i = 0; i < allNeighbors.size; ++i) {
+        Pre_Node *preNode = Datavector_at(allNeighbors, i);
+        if (preNode->visited == false) {
+            Datavector_pushBack(newNeighbors,preNode);
         }
     }
-    return neighbors;
+    Datavector_deinit(allNeighbors);
+    return newNeighbors;
 }
 
 void generate_vertex(ComplexGraph *graph, Pre_Node *pre_node, int nodeID) {
@@ -122,23 +126,49 @@ bool is_visited(Voxel node) {
 
 Pre_Node *follow_edge(ComplexGraph *graph, Edge *edge) {
     Voxel node = Datavector_at(edge->slabs, 1);
+    Neighbors_Vector edgeNodes;
+    Datavector_init(edgeNodes,10);
     Neighbors_Vector neighbors = find_new_neighbors(node);
+    Neighbors_Vector allNeighbors = find_all_neighbors(node);
     Pre_Node *neighbor = NULL;
-    if (neighbors.size != 1) {
+    if(allNeighbors.size == 2){
+        if (neighbors.size != 1) {
+            return NULL;
+        }
+    }else{
         return get_StageNode(node.x, node.y, node.z);
     }
+    visit_voxel(node);
     while (neighbors.size == 1) {
-        visit_voxel(node);
         neighbor = Datavector_at(neighbors, 0);
         if (neighbor->visited == false) {
             Datavector_pushBack(edge->slabs, neighbor->voxel);
-            neighbors = find_new_neighbors(neighbor->voxel);
-            if (neighbors.size == 1) {
+            Datavector_pushBack(edgeNodes,neighbor);
+            allNeighbors = find_all_neighbors(neighbor->voxel);
+            if (allNeighbors.size == 2) {
                 visit_voxel(neighbor->voxel);
+                neighbors = find_new_neighbors(neighbor->voxel);
+            }else{
+                return neighbor;
             }
         } else {
             Datavector_erase(neighbors, 0);
         }
+    }
+    if(edge->startNodeID == 24){
+        for (int i = 0; i < edge->slabs.size; ++i) {
+            Voxel voxel = Datavector_at(edge->slabs, i);
+            printf("Edge :%d,%d,%d\n",voxel.x,voxel.y,voxel.z);
+        }
+    }
+    if(allNeighbors.size == 2 && neighbors.size == 0){
+        for (int i = 0; i < allNeighbors.size; ++i) {
+            Pre_Node *potentialVertex = Datavector_at(allNeighbors, i);
+            if(!contains_neighbor(edgeNodes,potentialVertex->voxel)){
+                return potentialVertex;
+            }
+        }
+        return NULL;
     }
     return neighbor;
 }
@@ -221,7 +251,7 @@ Edge_Vector build_subgraph(ComplexGraph *graph, Edge *edge) {
             ComplexGraph_addEdge(graph, startNodeID, endNodeID, edgeID);
             ComplexGraph_addData2Edge(graph, edgeID, edge);
             calculate_edge_length(graph, edge);
-        } else{
+        } else {
             printf("error\n");
         }
     }
@@ -248,7 +278,7 @@ void readFile(int *x_max, int *y_max, int *z_max) {
     char *split = ", ";
     char line[250];
     dat_skeleton = fopen(filename_skeleton, "r");
-    if (dat_skeleton == 0) {
+    if (dat_skeleton == NULL) {
         printf("File not found");
     }
     while (fgets(line, sizeof(line), dat_skeleton) != NULL) {
@@ -313,26 +343,26 @@ double calculate_angle_z(Vector3D vector) {
     return fabs(asin(vector.z / vector_length(vector)) * 180 / M_PI);
 }
 
-Vertex_Vector get_allVertices(ComplexGraph *graph){
+Vertex_Vector get_allVertices(ComplexGraph *graph) {
     Vertex_Vector vertices;
     Datavector_init(vertices, 100);
     complexnode_t **values;
     long size = graph->nodes->allelements;
     Hashmap_getAllValues(graph->nodes, (void ***) &values, &size);
     for (int i = 0; i < size; ++i) {
-        Datavector_pushBack(vertices,(Vertex *) values[i]->nodeinfo.data);
+        Datavector_pushBack(vertices, (Vertex *) values[i]->nodeinfo.data);
     }
     return vertices;
 }
 
-Edge_Vector get_allEdges(ComplexGraph *graph){
+Edge_Vector get_allEdges(ComplexGraph *graph) {
     Edge_Vector edges;
     Datavector_init(edges, 100);
     graphedge_t **values;
     long size = graph->edges->allelements;
     Hashmap_getAllValues(graph->edges, (void ***) &values, &size);
     for (int i = 0; i < size; ++i) {
-        Datavector_pushBack(edges,(Edge *) values[i]->data);
+        Datavector_pushBack(edges, (Edge *) values[i]->data);
     }
     return edges;
 }
@@ -343,8 +373,8 @@ Vertex_Vector get_junctions(ComplexGraph *graph) {
     Vertex_Vector vertices = get_allVertices(graph);
     for (int i = 0; i < vertices.size; ++i) {
         Vertex *vertex = Datavector_at(vertices, i);
-        if(vertex->type == Junction){
-            Datavector_pushBack(junctions,vertex);
+        if (vertex->type == Junction) {
+            Datavector_pushBack(junctions, vertex);
         }
     }
     return junctions;

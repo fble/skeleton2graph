@@ -9,8 +9,8 @@
 
 #define buffer 500
 
-char *filename_skeleton = "/mnt/data/stud-lifa1015/membrane1/skeleton.dat";
-char *filename_output = "/mnt/data/stud-lifa1015/membrane1/graphs2/";
+char *filename_skeleton = "/mnt/data/stud-lifa1015/membrane3/skeleton.dat";
+char *filename_output = "/mnt/data/stud-lifa1015/membrane3/graphs2/";
 
 typedef struct voxel Voxel;
 
