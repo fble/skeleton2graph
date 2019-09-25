@@ -80,6 +80,11 @@ void generate_vertex(ComplexGraph *graph, Pre_Node *pre_node, int nodeID) {
     Datavector_init(vertex->voxel, 7);
     Neighbors_Vector allNeighbors = find_all_neighbors(pre_node->voxel);
     if(allNeighbors.size != 2){
+        if(allNeighbors.size == 1){
+            vertex->type = Endpoint;
+        }else{
+            vertex->type = Junction;
+        }
         Neighbors_Vector neighbors = find_new_neighbors(pre_node->voxel);
         Datavector_pushBack(vertex->voxel, pre_node->voxel);
         visit_voxel(pre_node->voxel);
@@ -109,11 +114,6 @@ void generate_vertex(ComplexGraph *graph, Pre_Node *pre_node, int nodeID) {
 //            }
 //        }
 
-        }
-        if(vertex->voxel.size == 1){
-            vertex->type = Endpoint;
-        }else{
-            vertex->type = Junction;
         }
         ComplexGraph_addData2Node(graph, nodeID, vertex);
         for (int i = 0; i < vertex->voxel.size; ++i) {
