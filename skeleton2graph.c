@@ -3,7 +3,7 @@
 
 long findNodeID(ComplexGraph *graph, Voxel voxel) {
     Hashmapelement *currentelement;
-    HASHMAP_FOREACH(graph->nodes,currentelement){
+    HASHMAP_FOREACH(graph->nodes, currentelement){
         complexnode_t *value = currentelement->value;
         Vertex *vertex = value->nodeinfo.data;
         for (int j = 0; j < vertex->voxel.size; ++j) {
@@ -64,11 +64,11 @@ Neighbors_Vector find_all_neighbors(Voxel voxel) {
 Neighbors_Vector find_new_neighbors(Voxel node) {
     Neighbors_Vector allNeighbors = find_all_neighbors(node);
     Neighbors_Vector newNeighbors;
-    Datavector_init(newNeighbors,2);
+    Datavector_init(newNeighbors, 2);
     for (int i = 0; i < allNeighbors.size; ++i) {
         Pre_Node *preNode = Datavector_at(allNeighbors, i);
         if (preNode->visited == false) {
-            Datavector_pushBack(newNeighbors,preNode);
+            Datavector_pushBack(newNeighbors, preNode);
         }
     }
     Datavector_deinit(allNeighbors);
@@ -78,34 +78,55 @@ Neighbors_Vector find_new_neighbors(Voxel node) {
 void generate_vertex(ComplexGraph *graph, Pre_Node *pre_node, int nodeID) {
     Vertex *vertex = malloc(sizeof(Vertex));
     Datavector_init(vertex->voxel, 7);
-    Neighbors_Vector neighbors = find_all_neighbors(pre_node->voxel);
-    Datavector_pushBack(vertex->voxel, pre_node->voxel);
-    visit_voxel(pre_node->voxel);
-    if (neighbors.size == 1) {
-        vertex->type = Endpoint;
-    } else {
-        vertex->type = Junction;
-    }
-    while (neighbors.size > 0) {
-        Pre_Node *node = Datavector_at(neighbors, 0);
-        Datavector_erase(neighbors, 0);
-        Neighbors_Vector new_nodes = find_all_neighbors(node->voxel);
-        if (new_nodes.size > 2) {
-            Datavector_pushBack(vertex->voxel, node->voxel);
-            visit_voxel(node->voxel);
-            for (int i = 0; i < new_nodes.size; ++i) {
-                Voxel new_node = Datavector_at(new_nodes, i)->voxel;
-                Neighbors_Vector newNeighbors = find_all_neighbors(new_node);
-                if (newNeighbors.size > 2 && !contains_neighbor(neighbors, new_node) && !is_visited(new_node)) {
-                    Datavector_pushBack(neighbors, Datavector_at(new_nodes, i));
-                } else {
-                    Datavector_erase(new_nodes, i);
+    Neighbors_Vector allNeighbors = find_all_neighbors(pre_node->voxel);
+    if(allNeighbors.size != 2){
+        Neighbors_Vector neighbors = find_new_neighbors(pre_node->voxel);
+        Datavector_pushBack(vertex->voxel, pre_node->voxel);
+        visit_voxel(pre_node->voxel);
+        while (neighbors.size > 0) {
+            Pre_Node *node = Datavector_at(neighbors, 0);
+            Datavector_erase(neighbors, 0);
+            Neighbors_Vector allNeighbors = find_all_neighbors(node->voxel);
+            if(allNeighbors.size != 2){
+                Datavector_pushBack(vertex->voxel,node->voxel);
+                visit_voxel(node->voxel);
+                Neighbors_Vector newNeighbors = find_new_neighbors(node->voxel);
+                for (int i = 0; i < newNeighbors.size; ++i) {
+                    Datavector_pushBack(neighbors,Datavector_at(newNeighbors,i));
                 }
             }
-        }
+//        if (new_nodes.size > 2) {
+//            Datavector_pushBack(vertex->voxel, node->voxel);
+//            visit_voxel(node->voxel);
+//            for (int i = 0; i < new_nodes.size; ++i) {
+//                Voxel new_node = Datavector_at(new_nodes, i)->voxel;
+//                Neighbors_Vector newNeighbors = find_all_neighbors(new_node);
+//                if (newNeighbors.size > 2 && !contains_neighbor(neighbors, new_node) && !is_visited(new_node)) {
+//                    Datavector_pushBack(neighbors, Datavector_at(new_nodes, i));
+//                } else {
+//                    Datavector_erase(new_nodes, i);
+//                }
+//            }
+//        }
 
+        }
+        if(vertex->voxel.size == 1){
+            vertex->type = Endpoint;
+        }else{
+            vertex->type = Junction;
+        }
+        ComplexGraph_addData2Node(graph, nodeID, vertex);
+        for (int i = 0; i < vertex->voxel.size; ++i) {
+            Voxel voxel = Datavector_at(vertex->voxel, i);
+            Neighbors_Vector allNeighbors = find_all_neighbors(voxel);
+            if(allNeighbors.size == 2){
+                printf("Vertex Error\n");
+            }
+        }
+    }else{
+        printf("Edge Error");
     }
-    ComplexGraph_addData2Node(graph, nodeID, vertex);
+
 }
 
 void visit_voxel(Voxel voxel) {
@@ -124,55 +145,92 @@ bool is_visited(Voxel node) {
     return stageNode->visited;
 }
 
+Voxel *get_next_edgeNode(Voxel node) {
+    Neighbors_Vector newNeighbors = find_new_neighbors(node);
+    if (newNeighbors.size == 1) {
+        Voxel *voxel = &Datavector_at(newNeighbors, 0)->voxel;
+        Neighbors_Vector allNeighbors = find_all_neighbors(*voxel);
+        if (allNeighbors.size == 2) {
+            return voxel;
+        }
+    }
+    return NULL;
+}
+
+
 Pre_Node *follow_edge(ComplexGraph *graph, Edge *edge) {
     Voxel node = Datavector_at(edge->slabs, 1);
-    Neighbors_Vector edgeNodes;
-    Datavector_init(edgeNodes,10);
-    Neighbors_Vector neighbors = find_new_neighbors(node);
     Neighbors_Vector allNeighbors = find_all_neighbors(node);
-    Pre_Node *neighbor = NULL;
-    if(allNeighbors.size == 2){
-        if (neighbors.size != 1) {
-            return NULL;
+    Voxel *previousNode;
+    if (allNeighbors.size == 2) {
+        Voxel *edgeNode = &node;
+        while(edgeNode != NULL){
+            previousNode = edgeNode;
+            visit_voxel(*edgeNode);
+            Datavector_pushBack(edge->slabs,*edgeNode);
+            edgeNode = get_next_edgeNode(*edgeNode);
         }
-    }else{
-        return get_StageNode(node.x, node.y, node.z);
-    }
-    visit_voxel(node);
-    while (neighbors.size == 1) {
-        neighbor = Datavector_at(neighbors, 0);
-        if (neighbor->visited == false) {
-            Datavector_pushBack(edge->slabs, neighbor->voxel);
-            Datavector_pushBack(edgeNodes,neighbor);
-            allNeighbors = find_all_neighbors(neighbor->voxel);
-            if (allNeighbors.size == 2) {
-                visit_voxel(neighbor->voxel);
-                neighbors = find_new_neighbors(neighbor->voxel);
-            }else{
-                return neighbor;
-            }
-        } else {
-            Datavector_erase(neighbors, 0);
-        }
-    }
-    if(edge->startNodeID == 24){
-        for (int i = 0; i < edge->slabs.size; ++i) {
-            Voxel voxel = Datavector_at(edge->slabs, i);
-            printf("Edge :%d,%d,%d\n",voxel.x,voxel.y,voxel.z);
-        }
-    }
-    if(allNeighbors.size == 2 && neighbors.size == 0){
-        for (int i = 0; i < allNeighbors.size; ++i) {
-            Pre_Node *potentialVertex = Datavector_at(allNeighbors, i);
-            if(!contains_neighbor(edgeNodes,potentialVertex->voxel)){
+        Neighbors_Vector potentialVertices = find_all_neighbors(*previousNode);
+        for (int i = 0; i < potentialVertices.size; ++i) {
+            Pre_Node *potentialVertex = Datavector_at(potentialVertices, i);
+            Neighbors_Vector neighbors = find_all_neighbors(potentialVertex->voxel);
+            if(neighbors.size != 2){
                 return potentialVertex;
             }
         }
-        return NULL;
+    } else{
+        return get_StageNode(node.x, node.y, node.z);
     }
-    return neighbor;
 }
-
+//Pre_Node *follow_edge(ComplexGraph *graph, Edge *edge) {
+//    Voxel node = Datavector_at(edge->slabs, 1);
+//    Neighbors_Vector edgeNodes;
+//    Datavector_init(edgeNodes,10);
+//    Neighbors_Vector neighbors = find_new_neighbors(node);
+//    Neighbors_Vector allNeighbors = find_all_neighbors(node);
+//    Pre_Node *neighbor = NULL;
+//    if(allNeighbors.size == 2){
+//        if (neighbors.size != 1) {
+//            return NULL;
+//        }
+//    }else{
+//        return get_StageNode(node.x, node.y, node.z);
+//    }
+//    visit_voxel(node);
+//    while (neighbors.size == 1) {
+//        neighbor = Datavector_at(neighbors, 0);
+//        if (neighbor->visited == false) {
+//            Datavector_pushBack(edge->slabs, neighbor->voxel);
+//            Datavector_pushBack(edgeNodes,neighbor);
+//            allNeighbors = find_all_neighbors(neighbor->voxel);
+//            if (allNeighbors.size == 2) {
+//                visit_voxel(neighbor->voxel);
+//                neighbors = find_new_neighbors(neighbor->voxel);
+//            }else{
+//                return neighbor;
+//            }
+//        } else {
+//            Datavector_erase(neighbors, 0);
+//        }
+//    }
+//    if(edge->startNodeID == 581){
+//        for (int i = 0; i < edge->slabs.size; ++i) {
+//            Voxel voxel = Datavector_at(edge->slabs, i);
+//            printf("Edge :%d,%d,%d\n",voxel.x,voxel.y,voxel.z);
+//        }
+//    }
+//    if(allNeighbors.size == 2 && neighbors.size == 0){
+//        for (int i = 0; i < allNeighbors.size; ++i) {
+//            Pre_Node *potentialVertex = Datavector_at(allNeighbors, i);
+//            if(!contains_neighbor(edgeNodes,potentialVertex->voxel)){
+//                return potentialVertex;
+//            }
+//        }
+//        return NULL;
+//    }
+//    return neighbor;
+//}
+//
 bool contains_neighbor(Neighbors_Vector vector, Voxel voxel) {
     for (int i = 0; i < vector.size; ++i) {
         Pre_Node *tmp = Datavector_at(vector, i);
@@ -510,7 +568,8 @@ int main(void) {
 //    }
     for (int i = 0; i < pre_nodes.size; ++i) {
         Pre_Node *preNode = &Datavector_at(pre_nodes, i);
-        if (preNode->visited == false) {
+        Neighbors_Vector allNeighbors = find_all_neighbors(preNode->voxel);
+        if (preNode->visited == false && allNeighbors.size != 2) {
             ComplexGraph *graph = build_graph(preNode);
 //            for (int i = 0; i < graph.vertices.size; ++i) {
 //                printf("Vertex Center: ");
