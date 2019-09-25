@@ -11,6 +11,7 @@ add_executable(skeleton2graph
         /home/stud-lifa1015/Projektarbeit/workspace/pace3d/lib/container/hashmap.c
         /home/stud-lifa1015/Projektarbeit/workspace/pace3d/lib/container/node.c
         /home/stud-lifa1015/Projektarbeit/workspace/pace3d/lib/container/list.c
+        /home/stud-lifa1015/Projektarbeit/workspace/pace3d/lib/container/vector3d.c
         /home/stud-lifa1015/Projektarbeit/workspace/pace3d/lib/wrapper.c
         /home/stud-lifa1015/Projektarbeit/workspace/pace3d/lib/exception.c)
 

@@ -7,11 +7,6 @@
 #include <container/vector3d.h>
 #include <container/complexgraph.h>
 
-#define buffer 500
-
-char *filename_skeleton = "/mnt/data/stud-lifa1015/membrane3/skeleton.dat";
-char *filename_output = "/mnt/data/stud-lifa1015/membrane3/graphs2/";
-
 typedef struct voxel Voxel;
 
 typedef struct pre_node Pre_Node;
