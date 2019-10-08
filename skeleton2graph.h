@@ -27,6 +27,9 @@ typedef declareVectorStructure(Edge*) Edgeptr_Vector;
 
 typedef declareVectorStructure(ComplexGraph *) Graph_Vector;
 
+typedef declareVectorStructure(Pre_Node *)
+        Neighbors_Vector;
+
 int global_nodeID = 0;
 
 int global_edgeID = 0;
@@ -46,12 +49,12 @@ struct voxel {
 enum vertex_type {
     Endpoint, Junction
 };
-
 struct edge {
     Voxel_Vector slabs;
     double length;
     int startNodeID;
 };
+
 //
 struct vertex {
     enum vertex_type type;
@@ -59,86 +62,8 @@ struct vertex {
 };
 
 Pre_Node_Vector pre_nodes;
+
 Graph_Vector graph_vector;
-
-void print_voxel(Voxel voxel);
-
-Voxel calculate_center(Vertex vertex) {
-    int x = 0;
-    int y = 0;
-    int z = 0;
-    for (int i = 0; i < vertex.voxel.size; ++i) {
-        x += Datavector_at(vertex.voxel, i).x;
-        y += Datavector_at(vertex.voxel, i).y;
-        z += Datavector_at(vertex.voxel, i).z;
-    }
-    double center_x = (double) x / vertex.voxel.size;
-    double center_y = (double) y / vertex.voxel.size;
-    double center_z = (double) z / vertex.voxel.size;
-    double min_distance = DBL_MAX;
-    Voxel current_center;
-    for (int i = 0; i < vertex.voxel.size; ++i) {
-        Voxel node = Datavector_at(vertex.voxel, i);
-        double distance = sqrt(pow(center_x - node.x, 2) + pow(center_y - node.y, 2) + pow(center_z - node.z, 2));
-        if (distance < min_distance) {
-            min_distance = distance;
-            current_center = node;
-        }
-    }
-    return current_center;
-}
-
-int x_dimensions;
-int y_dimensions;
-int z_dimensions;
-Pre_Node ****stage;
-
-void init_stage(int x_max, int y_max, int z_max) {
-    x_dimensions = x_max;
-    y_dimensions = y_max;
-    z_dimensions = z_max;
-    stage = calloc(x_dimensions, sizeof(Pre_Node ***));
-    for (int x = 0; x < x_dimensions; ++x) {
-        stage[x] = calloc(y_dimensions, sizeof(Pre_Node **));
-        for (int y = 0; y < x_dimensions; ++y) {
-            stage[x][y] = calloc(z_dimensions, sizeof(Pre_Node *));
-        }
-    }
-}
-
-Pre_Node *get_StageNode(int x, int y, int z) {
-    if ((x > 0) && (y > 0) && (z > 0) && (x <= x_dimensions) && (y <= y_dimensions) && (y <= y_dimensions)) {
-        return stage[x - 1][y - 1][z - 1];
-    }
-    return NULL;
-}
-
-typedef declareVectorStructure(Pre_Node *)
-        Neighbors_Vector;
-
-void visit_voxel(Voxel voxel);
-
-bool is_visited(Voxel voxel);
-
-bool contains_neighbor(Neighbors_Vector vector, Voxel voxel);
-
-void printEdgeStartpoint(Edge_Vector *edges2);
-
-Edge_Vector build_subgraph(ComplexGraph *graph, Edge *edge);
-
-void calculate_edge_length(ComplexGraph *graph, Edge *edge);
-
-Vertex_Vector get_allVertices(ComplexGraph *graph);
-
-
-double distance2;
-
-double distance3;
-
-void init_distance() {
-    distance2 = 2 * sqrt(2);
-    distance3 = 2 * sqrt(3);
-}
 
 int pattern_dist1[6][3] = {
         {1,  0,  0},
@@ -175,6 +100,44 @@ int pattern_dist3[8][3] = {
         {-1, -1, -1}
 };
 
+int x_dimensions;
+int y_dimensions;
+int z_dimensions;
+
+Pre_Node ****stage;
+
+double distance2;
+
+double distance3;
+
+Voxel calculate_center(Vertex vertex);
+
+void init_stage(int x_max, int y_max, int z_max);
+
+void fill_stage();
+
+Pre_Node *get_StageNode(int x, int y, int z) {
+    if ((x > 0) && (y > 0) && (z > 0) && (x <= x_dimensions) && (y <= y_dimensions) && (y <= y_dimensions)) {
+        return stage[x - 1][y - 1][z - 1];
+    }
+    return NULL;
+}
+
+void visit_voxel(Voxel voxel);
+
+bool contains_neighbor(Neighbors_Vector vector, Voxel voxel);
+
+Edge_Vector build_subgraph(ComplexGraph *graph, Edge *edge);
+
+void calculate_edge_length(ComplexGraph *graph, Edge *edge);
+
+Vertex_Vector get_allVertices(ComplexGraph *graph);
+
+void init_distance() {
+    distance2 = 2 * sqrt(2);
+    distance3 = 2 * sqrt(3);
+}
+
 void create_csv(Graph_Vector graph_vector, char *filename_output);
 
 void readFile(int *x_max, int *y_max, int *z_max);
@@ -197,10 +160,26 @@ void resetEdgeID(){
     global_edgeID = 0;
 }
 
-graphedge_t * getEdge(ComplexGraph * graph,int edgeID){
-    graphedge_t * edge;
-    Hashmap_get(graph->edges,edgeID,(void**)&edge);
-    return edge;
-}
+Vertex_Vector get_junctions(ComplexGraph *graph);
+
+Edge_Vector get_allEdges(ComplexGraph *graph);
+
+double euklid_distance(Voxel voxel1, Voxel voxel2);
+
+ComplexGraph *build_graph(Pre_Node *pre_node);
+
+Edge_Vector generate_edges(ComplexGraph *graph, int nodeID);
+
+Pre_Node *follow_edge(ComplexGraph *graph, Edge *edge);
+
+Voxel *get_next_edgeNode(Voxel node);
+
+void generate_vertex(ComplexGraph *graph, Pre_Node *pre_node, int nodeID);
+
+Neighbors_Vector find_new_neighbors(Voxel node);
+
+Neighbors_Vector find_all_neighbors(Voxel voxel);
+
+long findNodeID(ComplexGraph *graph, Voxel voxel);
 
 #endif /* HEADER_SKELETON_GRAPH_H_ */

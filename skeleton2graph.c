@@ -4,12 +4,19 @@
 
 static char *filein = "/mnt/data/stud-lifa1015/membrane3/skeleton.dat";
 static char *fileout = "/mnt/data/stud-lifa1015/membrane3/graphs2/";
-static long threshold = 0;
+static long threshold = 10;
 
 argument_t arguments[] = {
         {NULL,        ' ', PARAM_REQUIRED, "", NULL, "Skeleton file to process",             PARAM_FILEIN,  &filein},
         {NULL,        ' ', PARAM_REQUIRED, "", NULL, "Folder for the result output",          PARAM_FILEOUT, &fileout},
         {"threshold",  't', PARAM_OPTIONAL, "", NULL, "Threshold for the result, writes only graphs with nodes > threshold",PARAM_PERIODICFLAG, &threshold},
+};
+
+toolparam_t tool = {
+        .description   = "",
+        .example       = "",
+        .istested      = 0,
+        .arguments     = arguments
 };
 
 //searches the id of an already existing node
@@ -26,6 +33,44 @@ long findNodeID(ComplexGraph *graph, Voxel voxel) {
         }
     }
     return -1;
+}
+
+void init_stage(int x_max, int y_max, int z_max) {
+    x_dimensions = x_max;
+    y_dimensions = y_max;
+    z_dimensions = z_max;
+    stage = calloc(x_dimensions, sizeof(Pre_Node ***));
+    for (int x = 0; x < x_dimensions; ++x) {
+        stage[x] = calloc(y_dimensions, sizeof(Pre_Node **));
+        for (int y = 0; y < x_dimensions; ++y) {
+            stage[x][y] = calloc(z_dimensions, sizeof(Pre_Node *));
+        }
+    }
+}
+
+Voxel calculate_center(Vertex vertex) {
+    int x = 0;
+    int y = 0;
+    int z = 0;
+    for (int i = 0; i < vertex.voxel.size; ++i) {
+        x += Datavector_at(vertex.voxel, i).x;
+        y += Datavector_at(vertex.voxel, i).y;
+        z += Datavector_at(vertex.voxel, i).z;
+    }
+    double center_x = (double) x / vertex.voxel.size;
+    double center_y = (double) y / vertex.voxel.size;
+    double center_z = (double) z / vertex.voxel.size;
+    double min_distance = DBL_MAX;
+    Voxel current_center;
+    for (int i = 0; i < vertex.voxel.size; ++i) {
+        Voxel node = Datavector_at(vertex.voxel, i);
+        double distance = sqrt(pow(center_x - node.x, 2) + pow(center_y - node.y, 2) + pow(center_z - node.z, 2));
+        if (distance < min_distance) {
+            min_distance = distance;
+            current_center = node;
+        }
+    }
+    return current_center;
 }
 
 Neighbors_Vector find_all_neighbors(Voxel voxel) {
@@ -274,11 +319,6 @@ Edge_Vector build_subgraph(ComplexGraph *graph, Edge *edge) {
     return edges;
 }
 
-
-void print_voxel(Voxel voxel) {
-    printf("%d,%d,%d \n", voxel.x, voxel.y, voxel.z);
-}
-
 int cmp_x(const void *a, const void *b) {
     Pre_Node *node1 = (Pre_Node *) a;
     Pre_Node *node2 = (Pre_Node *) b;
@@ -483,17 +523,23 @@ void create_csv(Graph_Vector graph_vector, char *filename_path) {
     Datavector_deinit(graph_vector);
 }
 
-int main(void) {
+void fill_stage() {
+    for (int i = 0; i < pre_nodes.size; i++) {
+        Voxel node = Datavector_at(pre_nodes, i).voxel;
+        stage[node.x - 1][node.y - 1][node.z - 1] = &Datavector_at(pre_nodes, i);
+    }
+}
+
+int main(int argc, char *argv[]) {
+    PACE3DMAIN(argv[0]);
+//    getParams(argc, argv, tool, ARGUMENT(arguments));
     int x_max;
     int y_max;
     int z_max;
     readFile(&x_max, &y_max, &z_max);
     Datavector_sort(pre_nodes, cmp_x);
     init_stage(x_max, y_max, z_max);
-    for (int i = 0; i < pre_nodes.size; i++) {
-        Voxel node = Datavector_at(pre_nodes, i).voxel;
-        stage[node.x - 1][node.y - 1][node.z - 1] = &Datavector_at(pre_nodes, i);
-    }
+    fill_stage();
     init_distance();
     Graph_Vector graph_vector;
     Datavector_init(graph_vector, 1);
