@@ -27,8 +27,7 @@ typedef declareVectorStructure(Edge*) Edgeptr_Vector;
 
 typedef declareVectorStructure(ComplexGraph *) Graph_Vector;
 
-typedef declareVectorStructure(Pre_Node *)
-        Neighbors_Vector;
+typedef declareVectorStructure(Pre_Node *) Neighbors_Vector;
 
 int global_nodeID = 0;
 
@@ -100,9 +99,9 @@ int pattern_dist3[8][3] = {
         {-1, -1, -1}
 };
 
-int x_dimensions;
-int y_dimensions;
-int z_dimensions;
+int x_size;
+int y_size;
+int z_size;
 
 Pre_Node ****stage;
 
@@ -114,10 +113,8 @@ Voxel calculate_center(Vertex vertex);
 
 void init_stage(int x_max, int y_max, int z_max);
 
-void fill_stage();
-
 Pre_Node *get_StageNode(int x, int y, int z) {
-    if ((x > 0) && (y > 0) && (z > 0) && (x <= x_dimensions) && (y <= y_dimensions) && (y <= y_dimensions)) {
+    if ((x > 0) && (y > 0) && (z > 0) && (x <= x_size) && (y <= y_size) && (z <= z_size)) {
         return stage[x - 1][y - 1][z - 1];
     }
     return NULL;

@@ -5,7 +5,7 @@
 //static char *filein = "/data/stud-lama1053/skeletons/Membran_1_Porenraum/skeleton.dat";
 //static char* filein = "/data/stud-lama1053/skeletons/Isotropie_Gitter_Cube_20_20_Skelett_Matthieu/Skelett_Stege/skeleton.dat";
 static char* filein;
-static char *fileout = "/data/stud-lama1053/graphs/";
+static char *fileout = "/data/stud-lifa1015/output/";
 static long threshold = 0;
 
 argument_t arguments[] = {
@@ -157,7 +157,11 @@ void generate_vertex(ComplexGraph *graph, Pre_Node *pre_node, int nodeID) {
                 visit_voxel(node->voxel);
                 Neighbors_Vector newNeighbors = find_new_neighbors(node->voxel);
                 for (int i = 0; i < newNeighbors.size; ++i) {
-                    Datavector_pushBack(neighbors,Datavector_at(newNeighbors,i));
+                    Pre_Node * node = Datavector_at(newNeighbors,i);
+                    if(!contains_neighbor(neighbors,node->voxel) && node->visited == false){
+                        printf("%d;%d;%d\n",node->voxel.x,node->voxel.y,node->voxel.z);
+                        Datavector_pushBack(neighbors,node);
+                    }
                 }
                 Datavector_deinit(newNeighbors);
             }
@@ -765,6 +769,8 @@ int main(int argc, char *argv[]) {
 //    }
 
     for (int i = 0; i < pre_nodes.size; ++i) {
+
+
         Pre_Node *preNode = &Datavector_at(pre_nodes, i);
         Neighbors_Vector allNeighbors = find_all_neighbors(preNode->voxel);
 
@@ -783,8 +789,9 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i < graph_vector.size; ++i) {
         printf("Graph %d: size = %zu\n", i, get_junctions(Datavector_at(graph_vector, i)).size);
     }
-//    create_csv(graph_vector, fileout);
-    create_statOil(graph_vector,fileout);
+    create_csv(graph_vector, fileout);
+
+//    create_statOil(graph_vector,fileout);
     return 0;
 }
 
