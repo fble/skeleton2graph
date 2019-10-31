@@ -2,13 +2,15 @@
 
 #define buffer 500
 
-static char *filein = "/mnt/data/stud-lifa1015/membrane3/skeleton.dat";
-static char *fileout = "/mnt/data/stud-lifa1015/membrane3/graphs2/";
-static long threshold = 10;
+//static char *filein = "/data/stud-lama1053/skeletons/Membran_1_Porenraum/skeleton.dat";
+//static char* filein = "/data/stud-lama1053/skeletons/Isotropie_Gitter_Cube_20_20_Skelett_Matthieu/Skelett_Stege/skeleton.dat";
+static char* filein;
+static char *fileout = "/data/stud-lama1053/graphs/";
+static long threshold = 0;
 
 argument_t arguments[] = {
         {NULL,        ' ', PARAM_REQUIRED, "", NULL, "Skeleton file to process",             PARAM_FILEIN,  &filein},
-        {NULL,        ' ', PARAM_REQUIRED, "", NULL, "Folder for the result output",          PARAM_FILEOUT, &fileout},
+//        {NULL,        ' ', PARAM_REQUIRED, "", NULL, "Folder for the result output",          PARAM_FILEOUT, &fileout},
         {"threshold",  't', PARAM_OPTIONAL, "", NULL, "Threshold for the result, writes only graphs with nodes > threshold",PARAM_PERIODICFLAG, &threshold},
 };
 
@@ -36,14 +38,14 @@ long findNodeID(ComplexGraph *graph, Voxel voxel) {
 }
 
 void init_stage(int x_max, int y_max, int z_max) {
-    x_dimensions = x_max;
-    y_dimensions = y_max;
-    z_dimensions = z_max;
-    stage = calloc(x_dimensions, sizeof(Pre_Node ***));
-    for (int x = 0; x < x_dimensions; ++x) {
-        stage[x] = calloc(y_dimensions, sizeof(Pre_Node **));
-        for (int y = 0; y < x_dimensions; ++y) {
-            stage[x][y] = calloc(z_dimensions, sizeof(Pre_Node *));
+    x_size = x_max;
+    y_size = y_max;
+    z_size = z_max;
+    stage = calloc(x_size, sizeof(Pre_Node ***));
+    for (int x = 0; x < x_size; ++x) {
+        stage[x] = calloc(y_size, sizeof(Pre_Node **));
+        for (int y = 0; y < x_size; ++y) {
+            stage[x][y] = calloc(z_size, sizeof(Pre_Node *));
         }
     }
 }
@@ -98,7 +100,7 @@ Neighbors_Vector find_all_neighbors(Voxel voxel) {
         int patternZ = z + pattern_dist2[i][2];
         Pre_Node *stageNode = get_StageNode(patternX, patternY, patternZ);
         if (stageNode != NULL) {
-            if (stageNode->voxel.r + r >= distance2) {
+            if (stageNode->voxel.r + r >= distance2) { // Frage: Warum sind nicht alle Nachbarvoxel automatisch Nachbarn?
                 Datavector_pushBack(neighbors, stageNode);
             }
         }
@@ -110,7 +112,7 @@ Neighbors_Vector find_all_neighbors(Voxel voxel) {
         int patternZ = z + pattern_dist3[i][2];
         Pre_Node *stageNode = get_StageNode(patternX, patternY, patternZ);
         if (stageNode != NULL) {
-            if (stageNode->voxel.r + r >= distance3) {
+            if (stageNode->voxel.r + r >= distance3) { // Frage: Warum sind nicht alle Nachbarvoxel automatisch Nachbarn?
                 Datavector_pushBack(neighbors, stageNode);
             }
         }
@@ -335,7 +337,7 @@ void readFile(int *x_max, int *y_max, int *z_max) {
     char line[250];
     dat_skeleton = fopen(filein, "r");
     if (dat_skeleton == NULL) {
-        printf("File not found");
+        printf("File not found\n");
     }
     while (fgets(line, sizeof(line), dat_skeleton) != NULL) {
         Voxel voxel;
@@ -393,6 +395,41 @@ double calculate_angle_y(Vector3D vector) {
 
 double calculate_angle_z(Vector3D vector) {
     return fabs(asin(vector.z / Vector3D_abs(vector)) * 180 / M_PI);
+}
+
+/**
+ * @brief Calculates the minimum, maximum and average radius of an Edge
+ * @param edge Input Edge
+ * @param r_min Output minimum radius
+ * @param r_max Output maximum radius
+ * @param r_avg Output average radius
+ */
+void calc_minmaxavg_radius(Edge *edge, double *r_min, double *r_max, double *r_avg) {
+    *r_min = DBL_MAX;
+    *r_max = 0;
+    *r_avg = 0;
+
+    for (int i = 0; i < edge->slabs.size; ++i) {
+        Voxel node = Datavector_at(edge->slabs, i);
+        *r_avg += node.r;
+        if (node.r > *r_max) {
+            *r_max = node.r;
+        }
+        if (node.r < *r_min) {
+            *r_min = node.r;
+        }
+    }
+
+    *r_avg /= edge->slabs.size;
+}
+
+/**
+ *
+ * @param radius
+ * @return
+ */
+inline double calc_sphere_volume(double radius) {
+    return 4.0/3.0 * M_PI * pow(radius, 3);
 }
 
 Vertex_Vector get_allVertices(ComplexGraph *graph) {
@@ -523,23 +560,187 @@ void create_csv(Graph_Vector graph_vector, char *filename_path) {
     Datavector_deinit(graph_vector);
 }
 
-void fill_stage() {
-    for (int i = 0; i < pre_nodes.size; i++) {
-        Voxel node = Datavector_at(pre_nodes, i).voxel;
-        stage[node.x - 1][node.y - 1][node.z - 1] = &Datavector_at(pre_nodes, i);
+
+void write_node1(ComplexGraph* graph, FILE* node1) {
+    fprintf(node1, "%zu %d %d %d\n", graph->nodes->allelements, x_size, y_size, z_size);
+
+    for (long node_id = 0; node_id < graph->nodes->allelements; ++node_id) {
+        complexnode_t* current_complexnode;
+        Hashmap_get(graph->nodes, node_id, (void **) &current_complexnode);
+        node_t node = current_complexnode->nodeinfo;
+        Vertex* vertex = node.data;
+
+        // get center voxel of vertex
+        Voxel centervoxel = calculate_center(*vertex);
+
+        // write id, pos and conn number
+        fprintf(node1, "%li %d %d %d %li",
+                node_id,                // pore id
+                centervoxel.x,  // pore x coordinate
+                centervoxel.y,  // pore y coordinate
+                centervoxel.z,  // pore z coordinate
+                node.neighbourscount);  // amount of direct neighbours of the pore
+
+        // write id of every neighbour pore
+        for (int i = 0; i < node.neighbourscount; ++i) {
+            long id_a = current_complexnode->neighbours[i]->a->nodeinfo.id;
+            long id_b = current_complexnode->neighbours[i]->b->nodeinfo.id;
+
+            // only write the id of the neighbour and not of the current pore
+            if (id_a != node_id) {
+                fprintf(node1, " %li", id_a);
+            } else {
+                fprintf(node1, " %li", id_b);
+            }
+        }
+
+        // write inlet and outlet status
+        fprintf(node1, " %i %i",
+                0,   // TODO: Kriterium, um inlet zu definieren fehlt noch
+                0);  // TODO: Kriterium, um outlet zu definieren fehlt noch
+
+        // write throat ids
+        for (int i = 0; i < node.neighbourscount; ++i) {
+            fprintf(node1, " %li", current_complexnode->neighbours[i]->id);
+        }
+
+        // write newline
+        fprintf(node1, "\n");
+
+    }
+}
+
+void write_node2(ComplexGraph *graph, FILE *node2) {
+    for (long node_id = 0; node_id < graph->nodes->allelements; ++node_id) {
+        complexnode_t *current_complexnode;
+        Hashmap_get(graph->nodes, node_id, (void **) &current_complexnode);
+        node_t node = current_complexnode->nodeinfo;
+        Vertex *vertex = node.data;
+
+        // get center voxel of vertex
+        Voxel centervoxel = calculate_center(*vertex);
+
+        // write id and other properties
+        fprintf(node2, "%li %f %f %f %f\n",
+                node_id,                            // pore id
+                calc_sphere_volume(centervoxel.r),  // pore volume
+                centervoxel.r,                      // pore radius
+                1.0,                                // TODO: shape factor
+                1.0);                               // TODO: clay volume
+    }
+}
+
+void write_link1(ComplexGraph* graph, FILE* link1) {
+    // write total amount of throats
+    fprintf(link1, "%zu\n", graph->edges->allelements);
+
+    graphedge_t* current_edge;
+    long max_edge_index = graph->edges->allelements;
+
+    // iterate over every edge in the graph
+    // this might not be the most efficient ( O(n^2) )
+    for (long edge_id = 0; edge_id < max_edge_index; ++edge_id) {
+        if (false == Hashmap_contains(graph->edges, edge_id)) {
+            max_edge_index += 1; // current edge_id is not in the map, so bump the max index.
+            continue;
+        }
+
+        Hashmap_get(graph->edges, edge_id, (void **) &current_edge);
+        Vertex* vertex_a = current_edge->a->nodeinfo.data;
+        Vertex* vertex_b = current_edge->b->nodeinfo.data;
+        // edge->node_a->nodeinfo.data
+        //     !=
+        // node->nodeinfo.data
+
+        Edge* current_simple_edge = current_edge->data;
+        double radius_min = 0, radius_max = 0, radius_avg = 0;
+        calc_minmaxavg_radius(current_simple_edge, &radius_min, &radius_max, &radius_avg);
+
+        fprintf(link1, "%li %li %li %f %f %f\n",
+                current_edge->id,                                                            // throat id
+                current_edge->a->nodeinfo.id,                                                // pore a id
+                current_edge->b->nodeinfo.id,                                                // pore b id
+                radius_avg,                                                                  // throat radius
+                1.0,                                                                         // TODO: throat shape factor
+                euklid_distance(calculate_center(*vertex_a), calculate_center(*vertex_b)));
+    }
+}
+
+void write_link2(ComplexGraph* graph, FILE* link2) {
+    graphedge_t* current_edge;
+    long max_edge_index = graph->edges->allelements;
+
+    for (long edge_id = 0; edge_id < max_edge_index; ++edge_id) {
+        if (false == Hashmap_contains(graph->edges, edge_id)) {
+            max_edge_index += 1; // current edge_id is not in the map, so bump the max index.
+            continue;
+        }
+
+        Hashmap_get(graph->edges, edge_id, (void **) &current_edge);
+
+        fprintf(link2, "%li %li %li %f %f %f %f %f\n",
+                current_edge->id,              // throat id
+                current_edge->a->nodeinfo.id,  // pore a id
+                current_edge->b->nodeinfo.id,  // pore b id
+                1.0,                           // TODO: length pore 1
+                1.0,                           // TODO: length pore 2
+                1.0,                           // TODO: length throat
+                1.0,                           // TODO: throat volume
+                1.0);                          // TODO: throat clay volume
+    }
+}
+
+void create_statOil(Graph_Vector graph_vector, char *filename_path) {
+    //printf("writing StatOil files...\n");
+    for (int i = 0; i < graph_vector.size; ++i) {
+        ComplexGraph *graph = Datavector_at(graph_vector, i);
+        if (get_allVertices(graph).size > threshold) {
+            setlocale(LC_NUMERIC, "en_US.UTF-8");
+
+            char file[buffer];
+            sprintf(file, "%sGraph_%d", filename_path, i);
+
+            char output[buffer];
+            sprintf(output, "%s%s", file, "_node1.dat");
+            FILE *node1 = fopen(output, "w+");
+            sprintf(output, "%s%s", file, "_node2.dat");
+            FILE *node2 = fopen(output, "w+");
+            sprintf(output, "%s%s", file, "_link1.dat");
+            FILE *link1 = fopen(output, "w+");
+            sprintf(output, "%s%s", file, "_link2.dat");
+            FILE *link2 = fopen(output, "w+");
+
+            write_node1(graph, node1);
+            fclose(node1);
+
+            write_node2(graph, node2);
+            fclose(node2);
+
+            write_link1(graph, link1);
+            fclose(link1);
+
+            write_link2(graph, link2);
+            fclose(link2);
+        }
     }
 }
 
 int main(int argc, char *argv[]) {
     PACE3DMAIN(argv[0]);
-//    getParams(argc, argv, tool, ARGUMENT(arguments));
-    int x_max;
-    int y_max;
-    int z_max;
+    getParams(argc, argv, tool, ARGUMENT(arguments));
+
+    // IN
+    int x_max, y_max, z_max;
     readFile(&x_max, &y_max, &z_max);
-    Datavector_sort(pre_nodes, cmp_x);
+
+    Datavector_sort(pre_nodes, cmp_x); // Frage: warum werden die pre_nodes hier sortiert?
     init_stage(x_max, y_max, z_max);
-    fill_stage();
+
+    for (int i = 0; i < pre_nodes.size; i++) {
+        Voxel node = Datavector_at(pre_nodes, i).voxel;
+        stage[node.x - 1][node.y - 1][node.z - 1] = &Datavector_at(pre_nodes, i);
+    }
+
     init_distance();
     Graph_Vector graph_vector;
     Datavector_init(graph_vector, 1);
@@ -560,11 +761,13 @@ int main(int argc, char *argv[]) {
 //        }
 //        get_junctions(graph);
 //        printf("%lu\n", graph->nodes->allelements);
-//        printf("%lu", graph->edges->allelements);
+//        printf("%lu\n", graph->edges->allelements);
 //    }
+
     for (int i = 0; i < pre_nodes.size; ++i) {
         Pre_Node *preNode = &Datavector_at(pre_nodes, i);
         Neighbors_Vector allNeighbors = find_all_neighbors(preNode->voxel);
+
         if (preNode->visited == false && allNeighbors.size != 2) {
             ComplexGraph *graph = build_graph(preNode);
 //            for (int i = 0; i < graph.vertices.size; ++i) {
@@ -575,11 +778,13 @@ int main(int argc, char *argv[]) {
         }
         Datavector_deinit(allNeighbors);
     }
+
     Datavector_sort(graph_vector, cmp_graph);
     for (int i = 0; i < graph_vector.size; ++i) {
         printf("Graph %d: size = %zu\n", i, get_junctions(Datavector_at(graph_vector, i)).size);
     }
-    create_csv(graph_vector, fileout);
+//    create_csv(graph_vector, fileout);
+    create_statOil(graph_vector,fileout);
     return 0;
 }
 
