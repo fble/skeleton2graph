@@ -103,7 +103,7 @@ int x_size;
 int y_size;
 int z_size;
 
-Pre_Node ****stage;
+Pre_Node **stage;
 
 double distance2;
 
@@ -115,7 +115,7 @@ void init_stage(int x_max, int y_max, int z_max);
 
 Pre_Node *get_StageNode(int x, int y, int z) {
     if ((x > 0) && (y > 0) && (z > 0) && (x <= x_size) && (y <= y_size) && (z <= z_size)) {
-        return stage[x - 1][y - 1][z - 1];
+        return stage[(x - 1) + x_size * ((y - 1) + y_size * (z - 1))];
     }
     return NULL;
 }
