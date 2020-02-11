@@ -41,13 +41,8 @@ void init_stage(int x_max, int y_max, int z_max) {
     x_size = x_max;
     y_size = y_max;
     z_size = z_max;
-    stage = calloc(x_size, sizeof(Pre_Node ***));
-    for (int x = 0; x < x_size; ++x) {
-        stage[x] = calloc(y_size, sizeof(Pre_Node **));
-        for (int y = 0; y < x_size; ++y) {
-            stage[x][y] = calloc(z_size, sizeof(Pre_Node *));
-        }
-    }
+
+    stage = Calloc(x_size * y_size * z_size, sizeof(Pre_Node *));
 }
 
 Voxel calculate_center(Vertex vertex) {
@@ -100,7 +95,7 @@ Neighbors_Vector find_all_neighbors(Voxel voxel) {
         int patternZ = z + pattern_dist2[i][2];
         Pre_Node *stageNode = get_StageNode(patternX, patternY, patternZ);
         if (stageNode != NULL) {
-            if (stageNode->voxel.r + r >= distance2) { // Frage: Warum sind nicht alle Nachbarvoxel automatisch Nachbarn?
+            if (stageNode->voxel.r + r >= distance2) {
                 Datavector_pushBack(neighbors, stageNode);
             }
         }
@@ -112,7 +107,7 @@ Neighbors_Vector find_all_neighbors(Voxel voxel) {
         int patternZ = z + pattern_dist3[i][2];
         Pre_Node *stageNode = get_StageNode(patternX, patternY, patternZ);
         if (stageNode != NULL) {
-            if (stageNode->voxel.r + r >= distance3) { // Frage: Warum sind nicht alle Nachbarvoxel automatisch Nachbarn?
+            if (stageNode->voxel.r + r >= distance3) {
                 Datavector_pushBack(neighbors, stageNode);
             }
         }
@@ -579,7 +574,7 @@ void write_node1(ComplexGraph* graph, FILE* node1) {
 
         // write id, pos and conn number
         fprintf(node1, "%li %d %d %d %li",
-                node_id,                // pore id
+                node_id + 1,                // pore id
                 centervoxel.x,  // pore x coordinate
                 centervoxel.y,  // pore y coordinate
                 centervoxel.z,  // pore z coordinate
@@ -592,9 +587,9 @@ void write_node1(ComplexGraph* graph, FILE* node1) {
 
             // only write the id of the neighbour and not of the current pore
             if (id_a != node_id) {
-                fprintf(node1, " %li", id_a);
+                fprintf(node1, " %li", id_a + 1);
             } else {
-                fprintf(node1, " %li", id_b);
+                fprintf(node1, " %li", id_b + 1);
             }
         }
 
@@ -605,7 +600,7 @@ void write_node1(ComplexGraph* graph, FILE* node1) {
 
         // write throat ids
         for (int i = 0; i < node.neighbourscount; ++i) {
-            fprintf(node1, " %li", current_complexnode->neighbours[i]->id);
+            fprintf(node1, " %li", current_complexnode->neighbours[i]->id + 1);
         }
 
         // write newline
@@ -626,11 +621,11 @@ void write_node2(ComplexGraph *graph, FILE *node2) {
 
         // write id and other properties
         fprintf(node2, "%li %f %f %f %f\n",
-                node_id,                            // pore id
+                node_id + 1,                        // pore id
                 calc_sphere_volume(centervoxel.r),  // pore volume
                 centervoxel.r,                      // pore radius
-                1.0,                                // TODO: shape factor
-                1.0);                               // TODO: clay volume
+                1.0 / (4.0 * M_PI),                 // shape factor: spherical/circular: 1 / (4*PI)
+                calc_sphere_volume(centervoxel.r)); // TODO: clay volume
     }
 }
 
@@ -661,12 +656,12 @@ void write_link1(ComplexGraph* graph, FILE* link1) {
         calc_minmaxavg_radius(current_simple_edge, &radius_min, &radius_max, &radius_avg);
 
         fprintf(link1, "%li %li %li %f %f %f\n",
-                current_edge->id,                                                            // throat id
-                current_edge->a->nodeinfo.id,                                                // pore a id
-                current_edge->b->nodeinfo.id,                                                // pore b id
-                radius_avg,                                                                  // throat radius
-                1.0,                                                                         // TODO: throat shape factor
-                euklid_distance(calculate_center(*vertex_a), calculate_center(*vertex_b)));
+                current_edge->id + 1,                                                       // throat id
+                current_edge->a->nodeinfo.id + 1,                                           // pore a id
+                current_edge->b->nodeinfo.id + 1,                                           // pore b id
+                radius_avg,                                                                 // throat radius
+                1.0 / (4.0 * M_PI),                                                         // throat shape factor: cylindrical/circular: 1 / (4*PI)
+                euklid_distance(calculate_center(*vertex_a), calculate_center(*vertex_b))); // total throat length (pore center to pore center)
     }
 }
 
@@ -681,16 +676,25 @@ void write_link2(ComplexGraph* graph, FILE* link2) {
         }
 
         Hashmap_get(graph->edges, edge_id, (void **) &current_edge);
+        Vertex* vertex_a = current_edge->a->nodeinfo.data;
+        Vertex* vertex_b = current_edge->b->nodeinfo.data;
+        double throat_len = euklid_distance(calculate_center(*vertex_a), calculate_center(*vertex_b));
+
+        Edge* current_simple_edge = current_edge->data;
+        double radius_min = 0, radius_max = 0, radius_avg = 0;
+        calc_minmaxavg_radius(current_simple_edge, &radius_min, &radius_max, &radius_avg);
+
+        double throat_vol = M_PI * pow(radius_avg, 2) * throat_len;
 
         fprintf(link2, "%li %li %li %f %f %f %f %f\n",
-                current_edge->id,              // throat id
-                current_edge->a->nodeinfo.id,  // pore a id
-                current_edge->b->nodeinfo.id,  // pore b id
-                1.0,                           // TODO: length pore 1
-                1.0,                           // TODO: length pore 2
-                1.0,                           // TODO: length throat
-                1.0,                           // TODO: throat volume
-                1.0);                          // TODO: throat clay volume
+                current_edge->id + 1,              // throat id
+                current_edge->a->nodeinfo.id + 1,  // pore a id
+                current_edge->b->nodeinfo.id + 1,  // pore b id
+                0.0,                               // TODO: length pore 1
+                0.0,                               // TODO: length pore 2
+                throat_len,                        // TODO: length throat
+                throat_vol,                        // throat volume
+                throat_vol);                       // TODO: throat clay volume
     }
 }
 
@@ -742,7 +746,7 @@ int main(int argc, char *argv[]) {
 
     for (int i = 0; i < pre_nodes.size; i++) {
         Voxel node = Datavector_at(pre_nodes, i).voxel;
-        stage[node.x - 1][node.y - 1][node.z - 1] = &Datavector_at(pre_nodes, i);
+        stage[(node.x - 1) + x_size * ((node.y - 1) + y_size * (node.z - 1))] = &Datavector_at(pre_nodes, i);
     }
 
     init_distance();
@@ -770,7 +774,6 @@ int main(int argc, char *argv[]) {
 
     for (int i = 0; i < pre_nodes.size; ++i) {
 
-
         Pre_Node *preNode = &Datavector_at(pre_nodes, i);
         Neighbors_Vector allNeighbors = find_all_neighbors(preNode->voxel);
 
@@ -789,9 +792,9 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i < graph_vector.size; ++i) {
         printf("Graph %d: size = %zu\n", i, get_junctions(Datavector_at(graph_vector, i)).size);
     }
-    create_csv(graph_vector, fileout);
+    //create_csv(graph_vector, fileout);
 
-//    create_statOil(graph_vector,fileout);
+    create_statOil(graph_vector,fileout);
     return 0;
 }
 
